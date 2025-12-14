@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D Room Planner with Units</title>
+    <title>2D Room Planner with Export</title>
     <style>
         :root {
             --primary-color: #3b82f6;
@@ -80,6 +80,11 @@
 
         button:hover { background-color: #2563eb; }
         
+        button.secondary-btn {
+            background-color: #6b7280;
+        }
+        button.secondary-btn:hover { background-color: #4b5563; }
+
         button.delete-btn {
             background-color: #ef4444;
             margin-top: auto; 
@@ -193,6 +198,9 @@
         .furniture.selected .rotate-handle { display: block; }
 
         .hidden { display: none !important; }
+        
+        /* File Input hidden */
+        #fileInput { display: none; }
 
     </style>
 </head>
@@ -201,6 +209,16 @@
     <!-- Sidebar Controls -->
     <aside id="sidebar">
         <h2>Room Planner</h2>
+
+        <!-- Data Management -->
+        <div class="control-group" style="background-color: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0; border-bottom: none;">
+            <h3>Data Management</h3>
+            <div class="row">
+                <button id="exportBtn" class="secondary-btn">Export JSON</button>
+                <button id="importBtn" class="secondary-btn">Import JSON</button>
+                <input type="file" id="fileInput" accept=".json">
+            </div>
+        </div>
 
         <!-- Unit Definition -->
         <div class="control-group" style="background-color: #eef2ff; padding: 10px; border-radius: 6px; border-bottom: none;">
@@ -321,8 +339,12 @@
         
         const itemRotationInput = document.getElementById('itemRotationInput');
         
+        // Buttons
         const addBtn = document.getElementById('addBtn');
         const deleteBtn = document.getElementById('deleteBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const importBtn = document.getElementById('importBtn');
+        const fileInput = document.getElementById('fileInput');
 
         let selectedItem = null;
         let isDragging = false;
@@ -431,36 +453,29 @@
             }
         });
 
-        /* --- Spawn Logic --- */
-        addBtn.addEventListener('click', () => {
-            const shape = shapeSelect.value;
-            const color = itemColorInput.value;
-            const unitSize = parseInt(unitSizeInput.value) || 50;
-            
+        /* --- Factory Function --- */
+        // Creates a DOM element from config properties (in pixels)
+        function createFurnitureElement(config) {
             const el = document.createElement('div');
             el.classList.add('furniture');
-            el.style.backgroundColor = color;
-            el.dataset.rotation = 0; // Init rotation
-
-            let wPixels, hPixels;
-
-            if (shape === 'rectangle') {
-                const wUnits = parseFloat(itemWInput.value) || 1;
-                const hUnits = parseFloat(itemHInput.value) || 1;
-                wPixels = wUnits * unitSize;
-                hPixels = hUnits * unitSize;
-                el.style.width = wPixels + 'px';
-                el.style.height = hPixels + 'px';
-                el.style.borderRadius = '4px';
-            } else {
-                const rUnits = parseFloat(itemRadiusInput.value) || 0.5;
-                const dPixels = (rUnits * 2) * unitSize;
-                wPixels = dPixels;
-                hPixels = dPixels;
-                el.style.width = wPixels + 'px';
-                el.style.height = hPixels + 'px';
+            
+            // Set basic props
+            el.style.width = config.width + 'px';
+            el.style.height = config.height + 'px';
+            el.style.left = config.left + 'px';
+            el.style.top = config.top + 'px';
+            el.style.backgroundColor = config.color;
+            
+            // Shape specific
+            el.dataset.shape = config.shape;
+            if (config.shape === 'circle') {
                 el.style.borderRadius = '50%';
+            } else {
+                el.style.borderRadius = '4px';
             }
+
+            // Rotation
+            setRotation(el, config.rotation || 0);
 
             // 1. Resize Handles
             const directions = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
@@ -478,17 +493,138 @@
             rotHandle.addEventListener('mousedown', onRotateStart);
             el.appendChild(rotHandle);
 
-            // Spawn in center
+            // Drag Events
+            el.addEventListener('mousedown', onDragStart);
+
+            return el;
+        }
+
+        /* --- Spawn Logic (From UI) --- */
+        addBtn.addEventListener('click', () => {
+            const shape = shapeSelect.value;
+            const color = itemColorInput.value;
+            const unitSize = parseInt(unitSizeInput.value) || 50;
+            
+            let wPixels, hPixels;
+
+            if (shape === 'rectangle') {
+                const wUnits = parseFloat(itemWInput.value) || 1;
+                const hUnits = parseFloat(itemHInput.value) || 1;
+                wPixels = wUnits * unitSize;
+                hPixels = hUnits * unitSize;
+            } else {
+                const rUnits = parseFloat(itemRadiusInput.value) || 0.5;
+                const dPixels = (rUnits * 2) * unitSize;
+                wPixels = dPixels;
+                hPixels = dPixels;
+            }
+
+            // Center in room
             const roomW = parseInt(room.style.width);
             const roomH = parseInt(room.style.height);
-            el.style.left = (roomW / 2 - wPixels / 2) + 'px';
-            el.style.top = (roomH / 2 - hPixels / 2) + 'px';
+            const left = (roomW / 2 - wPixels / 2);
+            const top = (roomH / 2 - hPixels / 2);
 
-            el.addEventListener('mousedown', onDragStart);
-            
+            const config = {
+                shape: shape,
+                color: color,
+                width: wPixels,
+                height: hPixels,
+                left: left,
+                top: top,
+                rotation: 0
+            };
+
+            const el = createFurnitureElement(config);
             room.appendChild(el);
             selectItem(el);
         });
+
+        /* --- Export Logic --- */
+        exportBtn.addEventListener('click', () => {
+            // Gather state
+            const items = [];
+            document.querySelectorAll('.furniture').forEach(el => {
+                items.push({
+                    shape: el.dataset.shape || 'rectangle',
+                    color: el.style.backgroundColor, // rgb or hex
+                    width: parseFloat(el.style.width),
+                    height: parseFloat(el.style.height),
+                    left: parseFloat(el.style.left),
+                    top: parseFloat(el.style.top),
+                    rotation: getRotation(el)
+                });
+            });
+
+            const data = {
+                room: {
+                    width: parseInt(room.style.width),
+                    height: parseInt(room.style.height),
+                    unitSize: parseInt(unitSizeInput.value)
+                },
+                items: items
+            };
+
+            const jsonStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'room_plan.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+        /* --- Import Logic --- */
+        importBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    loadData(data);
+                } catch (err) {
+                    alert('Error parsing JSON file: ' + err.message);
+                }
+                // Reset input so same file can be selected again
+                fileInput.value = '';
+            };
+            reader.readAsText(file);
+        });
+
+        function loadData(data) {
+            // 1. Restore Room Settings
+            if (data.room) {
+                roomWInput.value = data.room.width || 600;
+                roomHInput.value = data.room.height || 400;
+                unitSizeInput.value = data.room.unitSize || 50;
+                
+                // Trigger updates
+                updateGrid();
+                updateRoomSize();
+            }
+
+            // 2. Clear existing Items
+            room.innerHTML = '';
+            selectItem(null);
+
+            // 3. Create Items
+            if (data.items && Array.isArray(data.items)) {
+                data.items.forEach(itemConfig => {
+                    const el = createFurnitureElement(itemConfig);
+                    room.appendChild(el);
+                });
+            }
+        }
 
         /* --- Selection Logic --- */
         function selectItem(item) {
@@ -543,16 +679,11 @@
             isDragging = true;
             
             const rect = target.getBoundingClientRect();
-            // Offset logic needs to be robust for rotated elements. 
-            // We track the distance from mouse to the element's CSS `left/top` anchor.
-            // Since we are moving `left` and `top`, we need to find the offset in the parent's coordinate space.
             const roomRect = room.getBoundingClientRect();
             
-            // Current css left/top
             const cssLeft = parseFloat(target.style.left) || 0;
             const cssTop = parseFloat(target.style.top) || 0;
             
-            // Mouse pos relative to room
             const mouseX = e.clientX - roomRect.left;
             const mouseY = e.clientY - roomRect.top;
             
@@ -605,8 +736,6 @@
             const dx = e.clientX - rotateCenter.x;
             const dy = e.clientY - rotateCenter.y;
             
-            // Atan2 returns angle in radians from -PI to PI
-            // We convert to degrees. 0 is Right (East). -90 is Up.
             initialAngle = Math.atan2(dy, dx) * (180 / Math.PI);
             initialRotation = getRotation(selectedItem);
 
@@ -624,9 +753,7 @@
             let delta = currentAngle - initialAngle;
             let newRot = initialRotation + delta;
 
-            // Optional Snap for rotation
             if (snapEnabledInput.checked) {
-                // Snap to 15 degrees
                 newRot = Math.round(newRot / 15) * 15;
             }
 
@@ -646,10 +773,7 @@
             resizeDirection = e.target.dataset.dir;
             initialRotation = getRotation(selectedItem);
             
-            // Store initial state
-            const rect = selectedItem.getBoundingClientRect(); // Visual rect
-            
-            // We need the CSS width/height/left/top, not the visual rect
+            // We need the CSS width/height/left/top
             initialResizeRect = {
                 width: parseFloat(selectedItem.style.width),
                 height: parseFloat(selectedItem.style.height),
@@ -666,33 +790,24 @@
         function onResizeMove(e) {
             if (!isResizing || !selectedItem) return;
 
-            // Raw mouse delta
             const rawDx = e.clientX - initialMousePos.x;
             const rawDy = e.clientY - initialMousePos.y;
 
-            // Convert to Local Space based on rotation
             const rad = initialRotation * (Math.PI / 180);
             const cos = Math.cos(rad);
             const sin = Math.sin(rad);
 
-            // Rotate vector (dx, dy) by -angle to get local axis aligned changes
             const localDx = rawDx * cos + rawDy * sin;
             const localDy = rawDy * cos - rawDx * sin;
 
             let newW = initialResizeRect.width;
             let newH = initialResizeRect.height;
             
-            // We will NOT update left/top for N/W resizing to keep it stable with rotation.
-            // This means N/W resizing will "push" the opposite side instead of "pulling" the edge.
-            // Implementing correct anchor-point rotation resizing is complex for this scope.
-            // We will allow width/height changes based on local axes.
-
             if (resizeDirection.includes('e')) newW += localDx;
             if (resizeDirection.includes('w')) newW -= localDx;
             if (resizeDirection.includes('s')) newH += localDy;
             if (resizeDirection.includes('n')) newH -= localDy;
 
-            // Apply Snap to size (not position)
             newW = snapValue(newW);
             newH = snapValue(newH);
 
@@ -716,8 +831,6 @@
             const roomW = parseInt(room.style.width);
             const roomH = parseInt(room.style.height);
 
-            // Note: This strictly constraints the unrotated box.
-            // Rotated corners might slightly exceed bounds visually.
             if (left < 0) left = 0;
             if (top < 0) top = 0;
             if (left + elW > roomW) left = roomW - elW;
