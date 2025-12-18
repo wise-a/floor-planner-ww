@@ -19,7 +19,7 @@
             margin: 0;
             height: 100vh;
             display: flex;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-color: #f3f4f6;
             color: var(--text-color);
             overflow: hidden;
         }
@@ -27,15 +27,15 @@
         /* --- Sidebar Controls --- */
         #sidebar {
             width: 300px;
-            background: var(--panel-bg);
+            background: rgba(255, 255, 255, 0.7);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            border-right: 1px solid var(--border-color);
+            border-right: 1px solid rgba(0, 0, 0, 0.05);
             padding: 20px;
             display: flex;
             flex-direction: column;
             gap: 20px;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
             z-index: 10;
             overflow-y: auto;
         }
@@ -277,7 +277,7 @@
             <h3>Furniture</h3>
 
             <!-- Add New -->
-            <div style="background: rgba(255, 255, 255, 0.4); padding: 10px; border-radius: 12px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.2);">
+            <div style="background: rgba(255, 255, 255, 0.5); padding: 10px; border-radius: 12px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.6);">
                 <h4 style="margin: 0 0 8px 0; font-size: 0.9rem;">Add New</h4>
 
                 <label>Shape</label>
@@ -302,7 +302,7 @@
             </div>
 
             <!-- Edit Selected -->
-            <div style="background: rgba(255, 255, 255, 0.4); padding: 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2);">
+            <div style="background: rgba(255, 255, 255, 0.5); padding: 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.6);">
                 <h4 style="margin: 0 0 8px 0; font-size: 0.9rem;">Edit Selected</h4>
 
                 <div class="row" style="margin-bottom: 8px;">
